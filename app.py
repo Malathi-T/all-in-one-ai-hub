@@ -1,215 +1,226 @@
-@"
 import gradio as gr
 from transformers import pipeline
 
-print('Loading models...')
-sentiment_model = pipeline('sentiment-analysis', model='distilbert-base-uncased-finetuned-sst-2-english')
-emotion_model = pipeline('text-classification', model='j-hartmann/emotion-english-distilroberta-base', top_k=None)
-qa_model = pipeline('question-answering', model='distilbert-base-cased-distilled-squad')
-lang_model = pipeline('text-classification', model='papluca/xlm-roberta-base-language-detection')
-ner_model = pipeline('ner', model='dbmdz/bert-large-cased-finetuned-conll03-english', aggregation_strategy='simple')
-zero_shot = pipeline('zero-shot-classification', model='facebook/bart-large-mnli')
-print('All models loaded!')
+# ══════════════════════════════════════════════════════
+#   🌟 ALL-IN-ONE AI HUB
+#   Built by: Malathi
+#   Platform: Hugging Face Spaces
+#   Framework: Gradio
+# ══════════════════════════════════════════════════════
+
+print("Loading AI models...")
+
+sentiment_model = pipeline("sentiment-analysis", model="distilbert-base-uncased-finetuned-sst-2-english")
+summarizer_model = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
+translator_model = pipeline("translation_en_to_fr", model="Helsinki-NLP/opus-mt-en-fr")
+qa_model = pipeline("question-answering", model="distilbert-base-cased-distilled-squad")
+
+print("All 4 models loaded!")
 
 def analyze_sentiment(text):
-    if not text.strip(): return 'Please enter text.'
-    r = sentiment_model(text)[0]
-    score = round(r['score']*100, 2)
-    emoji = '😊' if r['label']=='POSITIVE' else '😔'
-    bar = '█'*int(score/5) + '░'*(20-int(score/5))
-    return f"{emoji} {r['label']}\n\nConfidence: {score}%\n[{bar}]"
+    if not text.strip(): return "Please enter some text."
+    result = sentiment_model(text)[0]
+    label = result['label']
+    score = round(result['score'] * 100, 2)
+    emoji = "😊" if label == "POSITIVE" else "😔"
+    bar = "█" * int(score/5) + "░" * (20 - int(score/5))
+    return f"{emoji}  {label}\n\nConfidence: {score}%\n[{bar}]\n\n━━━━━━━━━━━━━━━━━━\n📌 How it works:\nYour text → DistilBERT model → Prediction\n🤖 Model: distilbert-base-uncased-finetuned-sst-2-english"
+
+def summarize_text(text):
+    if not text.strip(): return "Please enter some text."
+    words = len(text.split())
+    if words < 30: return f"Too short! You entered {words} words. Need at least 30."
+    try:
+        max_len = min(130, max(30, words // 3))
+        min_len = min(25, max_len - 5)
+        result = summarizer_model(text, max_length=max_len, min_length=min_len, do_sample=False)
+        summary = result[0]['summary_text']
+        reduction = round((1 - len(summary.split()) / words) * 100)
+        return f"📝  SUMMARY\n\n{summary}\n\n━━━━━━━━━━━━━━━━━━\nOriginal: {words} words\nSummary: {len(summary.split())} words\nReduced: {reduction}%\n\n📌 How it works:\nYour text → DistilBART model → Summary\n🤖 Model: sshleifer/distilbart-cnn-12-6"
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+def translate_text(text):
+    if not text.strip(): return "Please enter English text."
+    try:
+        result = translator_model(text)
+        translation = result[0]['translation_text']
+        return f"🌍  TRANSLATION\n\n🇬🇧 English:\n{text}\n\n🇫🇷 French:\n{translation}\n\n━━━━━━━━━━━━━━━━━━\n📌 How it works:\nEnglish → Helsinki-NLP model → French\n🤖 Model: Helsinki-NLP/opus-mt-en-fr"
+    except Exception as e:
+        return f"Error: {str(e)}"
 
 def answer_question(context, question):
-    if not context.strip() or not question.strip(): return 'Please enter context and question.'
-    r = qa_model(question=question, context=context)
-    return f"🤖 ANSWER\n\n{r['answer']}\n\nConfidence: {round(r['score']*100,2)}%"
-
-def detect_emotion(text):
-    if not text.strip(): return 'Please enter text.'
-    results = sorted(emotion_model(text)[0], key=lambda x: x['score'], reverse=True)
-    emojis = {'joy':'😄','sadness':'😢','anger':'😠','fear':'😨','surprise':'😲','disgust':'🤢','neutral':'😐'}
-    out = '🎭 EMOTION ANALYSIS\n\n'
-    for r in results:
-        lbl = r['label'].lower()
-        sc = round(r['score']*100,1)
-        bar = '█'*int(sc/5)+'░'*(20-int(sc/5))
-        out += f"{emojis.get(lbl,'🔵')} {lbl.upper():10} {sc:5.1f}%  [{bar}]\n"
-    return out
-
-def detect_language(text):
-    if not text.strip(): return 'Please enter text.'
-    results = lang_model(text, top_k=5)
-    names = {'en':'English 🇬🇧','fr':'French 🇫🇷','de':'German 🇩🇪','es':'Spanish 🇪🇸','it':'Italian 🇮🇹','hi':'Hindi 🇮🇳','ar':'Arabic 🇸🇦','zh':'Chinese 🇨🇳','ja':'Japanese 🇯🇵','ru':'Russian 🇷🇺'}
-    out = '🌐 LANGUAGE DETECTION\n\n'
-    for r in results:
-        sc = round(r['score']*100,1)
-        nm = names.get(r['label'], r['label'])
-        bar = '█'*int(sc/5)+'░'*(20-int(sc/5))
-        out += f"{nm:22} {sc:5.1f}%  [{bar}]\n"
-    return out
-
-def extract_keywords(text):
-    if not text.strip(): return 'Please enter text.'
-    entities = ner_model(text)
-    stop = {'the','a','an','is','are','was','in','on','at','to','for','of','and','or','but','it','this','that'}
-    freq = {}
-    for w in text.split():
-        w2 = w.lower().strip('.,!?')
-        if len(w2)>3 and w2 not in stop:
-            freq[w2] = freq.get(w2,0)+1
-    top = sorted(freq.items(), key=lambda x:x[1], reverse=True)[:8]
-    out = '🎯 KEYWORDS\n\n📍 Named Entities:\n'
-    seen = set()
-    for e in entities[:8]:
-        if e['word'] not in seen:
-            out += f"  • {e['word']:20} [{e['entity_group']}]\n"
-            seen.add(e['word'])
-    out += '\n📊 Top Keywords:\n'
-    for word,count in top:
-        out += f"  • {word:20} {'█'*min(count*2,10)} ({count}x)\n"
-    return out
-
-def check_grammar(text):
-    if not text.strip(): return 'Please enter text.'
-    issues = []
-    if text[0].islower(): issues.append('❌ Start with a capital letter')
-    if not text.rstrip().endswith(('.','!','?')): issues.append('❌ End with punctuation')
-    if '  ' in text: issues.append('❌ Remove double spaces')
-    out = f'🔤 GRAMMAR CHECK\n\nWords: {len(text.split())}\n\n'
-    if not issues: return out + '✅ No issues found! Great writing! 🌟'
-    return out + '\n'.join(issues)
-
-def analyze_resume(text):
-    if not text.strip(): return 'Please paste resume text.'
-    sections = {
-        'Contact Info': any(k in text.lower() for k in ['email','phone','linkedin']),
-        'Education': any(k in text.lower() for k in ['education','university','degree']),
-        'Experience': any(k in text.lower() for k in ['experience','worked','company']),
-        'Skills': any(k in text.lower() for k in ['skills','python','javascript']),
-        'Projects': any(k in text.lower() for k in ['project','built','developed']),
-    }
-    score = min(100, sum(sections.values())*18)
-    grade = 'A+' if score>=90 else 'A' if score>=80 else 'B' if score>=60 else 'C'
-    bar = '█'*(score//5)+'░'*(20-score//5)
-    out = f'📄 RESUME SCORE\n\nScore: {score}/100  Grade: {grade}\n[{bar}]\n\n'
-    for s,f in sections.items():
-        out += f"  {'✅' if f else '❌'} {s}\n"
-    return out
-
-def detect_fake_news(text):
-    if not text.strip(): return 'Please enter news text.'
-    result = zero_shot(text, candidate_labels=['real news','fake news','satire','opinion'])
-    out = '🤔 FAKE NEWS ANALYSIS\n\n'
-    for label,score in zip(result['labels'],result['scores']):
-        sc = round(score*100,1)
-        bar = '█'*int(sc/5)+'░'*(20-int(sc/5))
-        out += f"  {label:15} {sc:5.1f}%  [{bar}]\n"
-    top = result['labels'][0]
-    verdict = '🔴 LIKELY FAKE' if 'fake' in top else '🟡 SATIRE' if 'satire' in top else '🟢 LIKELY REAL'
-    return out + f'\nVerdict: {verdict}'
-
-def text_to_bullets(text):
-    if not text.strip(): return 'Please enter text.'
-    sents = [s.strip() for s in text.replace('!','.').replace('?','.').split('.') if len(s.strip())>15]
-    out = '💬 BULLET POINTS\n\n'
-    for s in sents[:8]: out += f'  • {s}\n'
-    return out
-
-def translate_text(text, lang):
-    if not text.strip(): return 'Please enter English text.'
-    codes = {'French 🇫🇷':'fr','German 🇩🇪':'de','Spanish 🇪🇸':'es','Italian 🇮🇹':'it','Hindi 🇮🇳':'hi','Arabic 🇸🇦':'ar','Portuguese 🇵🇹':'pt','Russian 🇷🇺':'ru'}
-    code = codes.get(lang,'fr')
+    if not context.strip(): return "Please enter a context paragraph."
+    if not question.strip(): return "Please enter a question."
     try:
-        tr = pipeline('translation', model=f'Helsinki-NLP/opus-mt-en-{code}')
-        return f"🌍 TRANSLATION\n\n🇬🇧 English:\n{text}\n\n{lang.split()[-1]} {lang.split()[0]}:\n{tr(text)[0]['translation_text']}"
+        result = qa_model(question=question, context=context)
+        answer = result['answer']
+        score = round(result['score'] * 100, 2)
+        return f"🤖  ANSWER\n\n{answer}\n\n━━━━━━━━━━━━━━━━━━\nConfidence: {score}%\n\n📌 How it works:\nContext + Question → DistilBERT → Answer\n🤖 Model: distilbert-base-cased-distilled-squad"
     except Exception as e:
-        return f'Error: {str(e)}'
+        return f"Error: {str(e)}"
 
-with gr.Blocks(title='🌟 All-in-One AI Hub', theme=gr.themes.Soft(primary_hue='indigo')) as demo:
-    gr.HTML('<div style="background:linear-gradient(135deg,#0f172a,#1e1b4b,#164e63);border-radius:16px;padding:24px;text-align:center;color:white;margin-bottom:20px;"><div style="font-size:2rem;font-weight:bold;">🌟 All-in-One AI Hub</div><div style="opacity:0.75;">12 AI Features · Hugging Face · By Malathi</div></div>')
+with gr.Blocks(
+    title="🌟 All-in-One AI Hub",
+    theme=gr.themes.Soft(primary_hue="indigo", secondary_hue="cyan"),
+    css="""
+        .gradio-container { max-width: 900px !important; margin: auto !important; }
+    """
+) as demo:
 
-    with gr.Tab('😊 Sentiment'):
+    gr.HTML("""
+        <div style="background:linear-gradient(135deg,#0f172a,#1e1b4b,#164e63);
+                    border-radius:16px;padding:28px;text-align:center;
+                    color:white;margin-bottom:20px;">
+            <div style="font-size:2rem;font-weight:bold;margin-bottom:8px;">
+                🌟 All-in-One AI Hub
+            </div>
+            <div style="opacity:0.75;margin-bottom:12px;">
+                Powered by Hugging Face Pre-trained Models · Built with Gradio
+            </div>
+            <div style="background:rgba(255,255,255,0.15);border-radius:20px;
+                        padding:8px 20px;display:inline-block;font-size:0.9rem;">
+                User Input → Hugging Face Model → AI Output
+            </div>
+        </div>
+    """)
+
+    with gr.Tab("😊 Sentiment Analysis"):
+        gr.HTML("""<div style="background:#e0e7ff;border-radius:10px;padding:12px;
+                    color:#3730a3;margin-bottom:14px;">
+            <b>📌 What it does:</b> Detects if text is Positive or Negative<br>
+            <b>🔄 Flow:</b> You type → DistilBERT model → POSITIVE or NEGATIVE result<br>
+            <b>🎯 Use case:</b> Analyzing reviews, feedback, comments
+        </div>""")
         with gr.Row():
             with gr.Column():
-                s_in=gr.Textbox(label='Enter text',lines=4)
-                gr.Button('Analyze',variant='primary').click(analyze_sentiment,s_in,gr.Textbox(label='Result',lines=7))
+                s_in = gr.Textbox(label="✏️ Enter your text", placeholder="I love learning AI!", lines=5)
+                s_btn = gr.Button("🔍 Analyze Sentiment", variant="primary", size="lg")
+            with gr.Column():
+                s_out = gr.Textbox(label="🤖 AI Result", lines=10)
+        gr.Examples(
+            examples=[
+                ["I absolutely love this course! It is amazing and very helpful."],
+                ["This is terrible. I am very disappointed with the results."],
+                ["The weather today is nice and I feel great!"],
+                ["I hate when things do not work. Very frustrating."],
+            ],
+            inputs=s_in
+        )
+        s_btn.click(fn=analyze_sentiment, inputs=s_in, outputs=s_out)
 
-    with gr.Tab('🤖 Q&A Bot'):
+    with gr.Tab("📝 Text Summarizer"):
+        gr.HTML("""<div style="background:#e0e7ff;border-radius:10px;padding:12px;
+                    color:#3730a3;margin-bottom:14px;">
+            <b>📌 What it does:</b> Converts long text into a short summary<br>
+            <b>🔄 Flow:</b> You paste text → DistilBART model → Short summary<br>
+            <b>🎯 Use case:</b> Summarizing articles, notes, study material
+        </div>""")
         with gr.Row():
             with gr.Column():
-                q_ctx=gr.Textbox(label='Context paragraph',lines=5)
-                q_q=gr.Textbox(label='Your question',lines=2)
-                q_btn=gr.Button('Get Answer',variant='primary')
+                t_in = gr.Textbox(label="✏️ Paste long text (min 30 words)", placeholder="Paste a long paragraph here...", lines=10)
+                t_btn = gr.Button("📝 Summarize", variant="primary", size="lg")
             with gr.Column():
-                q_out=gr.Textbox(label='Answer',lines=7)
-        q_btn.click(answer_question,[q_ctx,q_q],q_out)
+                t_out = gr.Textbox(label="🤖 AI Summary", lines=10)
+        gr.Examples(
+            examples=[["""Machine learning is a branch of artificial intelligence that enables
+            computers to learn from data without being explicitly programmed.
+            Instead of writing rules manually, machine learning algorithms find
+            patterns in large datasets and use those patterns to make predictions.
+            There are three main types: supervised learning, unsupervised learning,
+            and reinforcement learning. Supervised learning uses labeled data,
+            while unsupervised learning finds hidden patterns in unlabeled data.
+            Machine learning is used in image recognition, natural language processing,
+            fraud detection, recommendation systems, and medical diagnosis."""]],
+            inputs=t_in
+        )
+        t_btn.click(fn=summarize_text, inputs=t_in, outputs=t_out)
 
-    with gr.Tab('🎭 Emotions'):
+    with gr.Tab("🌍 Translator EN → FR"):
+        gr.HTML("""<div style="background:#e0e7ff;border-radius:10px;padding:12px;
+                    color:#3730a3;margin-bottom:14px;">
+            <b>📌 What it does:</b> Translates English text to French<br>
+            <b>🔄 Flow:</b> You type English → Helsinki-NLP model → French text<br>
+            <b>🎯 Use case:</b> Language learning, translating content
+        </div>""")
         with gr.Row():
             with gr.Column():
-                e_in=gr.Textbox(label='Enter text',lines=4)
-                gr.Button('Detect',variant='primary').click(detect_emotion,e_in,gr.Textbox(label='Emotions',lines=10))
+                tr_in = gr.Textbox(label="✏️ English Text", placeholder="Hello! I am learning AI.", lines=5)
+                tr_btn = gr.Button("🌍 Translate to French", variant="primary", size="lg")
+            with gr.Column():
+                tr_out = gr.Textbox(label="🤖 French Translation", lines=10)
+        gr.Examples(
+            examples=[
+                ["Hello! My name is Malathi and I am learning Artificial Intelligence."],
+                ["Hugging Face is a platform for sharing AI models."],
+                ["I built an AI application using Python and Gradio."],
+                ["Thank you for visiting my All-in-One AI Hub!"],
+            ],
+            inputs=tr_in
+        )
+        tr_btn.click(fn=translate_text, inputs=tr_in, outputs=tr_out)
 
-    with gr.Tab('🌐 Lang Detect'):
+    with gr.Tab("🤖 Q&A Bot"):
+        gr.HTML("""<div style="background:#e0e7ff;border-radius:10px;padding:12px;
+                    color:#3730a3;margin-bottom:14px;">
+            <b>📌 What it does:</b> Answers questions based on a paragraph you provide<br>
+            <b>🔄 Flow:</b> Context + Question → DistilBERT → Finds exact answer<br>
+            <b>🎯 Use case:</b> Study assistant, reading comprehension help
+        </div>""")
         with gr.Row():
             with gr.Column():
-                l_in=gr.Textbox(label='Enter text in any language',lines=4)
-                gr.Button('Detect Language',variant='primary').click(detect_language,l_in,gr.Textbox(label='Result',lines=8))
+                qa_ctx = gr.Textbox(label="📄 Context Paragraph", placeholder="Paste any paragraph here...", lines=7)
+                qa_q = gr.Textbox(label="❓ Your Question", placeholder="Ask a question about the paragraph...", lines=2)
+                qa_btn = gr.Button("🤖 Get Answer", variant="primary", size="lg")
+            with gr.Column():
+                qa_out = gr.Textbox(label="🤖 AI Answer", lines=10)
+        gr.Examples(
+            examples=[
+                ["Python is a high-level programming language created by Guido van Rossum in 1991. It is known for its simple and readable syntax. Python is widely used in web development, data science, artificial intelligence, and automation.", "Who created Python?"],
+                ["Hugging Face is a company founded in 2016 that provides tools for building machine learning applications. It is best known for its Transformers library and Model Hub which has thousands of pre-trained models.", "What is Hugging Face best known for?"],
+                ["Gradio is an open-source Python library that allows developers to quickly build web interfaces for machine learning models. With just a few lines of code, you can create interactive demos that can be shared through a public link.", "What is Gradio used for?"],
+            ],
+            inputs=[qa_ctx, qa_q]
+        )
+        qa_btn.click(fn=answer_question, inputs=[qa_ctx, qa_q], outputs=qa_out)
 
-    with gr.Tab('🎯 Keywords'):
-        with gr.Row():
-            with gr.Column():
-                k_in=gr.Textbox(label='Enter text',lines=5)
-                k_btn=gr.Button('Extract',variant='primary')
-            with gr.Column():
-                k_out=gr.Textbox(label='Keywords',lines=8)
-        k_btn.click(extract_keywords,k_in,k_out)
+    with gr.Tab("ℹ️ About"):
+        gr.HTML("""
+            <div style="max-width:720px;margin:auto;padding:10px;">
+                <div style="background:linear-gradient(135deg,#0f172a,#1e1b4b);
+                            border-radius:16px;padding:24px;color:white;
+                            text-align:center;margin-bottom:20px;">
+                    <h2>🌟 All-in-One AI Hub</h2>
+                    <p style="opacity:0.75;">Built with Hugging Face + Gradio</p>
+                </div>
+                <div style="background:#e0e7ff;border-radius:12px;padding:16px;margin-bottom:14px;">
+                    <h3 style="color:#3730a3;">🤗 What is Hugging Face?</h3>
+                    <p style="line-height:1.8;color:#1e1b4b;">
+                        GitHub → sharing <b>code</b><br>
+                        Hugging Face → sharing <b>AI models</b><br><br>
+                        A Space = small web app that runs an AI model live on the internet.<br>
+                        Flow: <b>User Input → API → Model → Output</b>
+                    </p>
+                </div>
+                <div style="background:#fff7ed;border-radius:12px;padding:16px;margin-bottom:14px;">
+                    <h3 style="color:#92400e;">🤖 Models Used</h3>
+                    <p style="line-height:2;color:#1e1b4b;">
+                        😊 Sentiment → distilbert-base-uncased-finetuned-sst-2-english<br>
+                        📝 Summarizer → sshleifer/distilbart-cnn-12-6<br>
+                        🌍 Translator → Helsinki-NLP/opus-mt-en-fr<br>
+                        🤖 Q&A Bot → distilbert-base-cased-distilled-squad
+                    </p>
+                </div>
+                <div style="background:#fdf2f8;border-radius:12px;padding:16px;">
+                    <h3 style="color:#9d174d;">👩‍💻 Built By</h3>
+                    <p style="line-height:1.8;color:#1e1b4b;">
+                        <b>Malathi</b> — Student Developer<br>
+                        🎓 Learning AI & Machine Learning<br>
+                        🚀 Happy Coding Learning Platform · March 2026
+                    </p>
+                </div>
+            </div>
+        """)
 
-    with gr.Tab('🔤 Grammar'):
-        with gr.Row():
-            with gr.Column():
-                gr_in=gr.Textbox(label='Enter text',lines=5)
-                gr_btn=gr.Button('Check Grammar',variant='primary')
-            with gr.Column():
-                gr_out=gr.Textbox(label='Report',lines=8)
-        gr_btn.click(check_grammar,gr_in,gr_out)
-
-    with gr.Tab('📄 Resume'):
-        with gr.Row():
-            with gr.Column():
-                r_in=gr.Textbox(label='Paste resume',lines=10)
-                r_btn=gr.Button('Analyze Resume',variant='primary')
-            with gr.Column():
-                r_out=gr.Textbox(label='Score',lines=10)
-        r_btn.click(analyze_resume,r_in,r_out)
-
-    with gr.Tab('🤔 Fake News'):
-        with gr.Row():
-            with gr.Column():
-                f_in=gr.Textbox(label='Paste news',lines=5)
-                f_btn=gr.Button('Check News',variant='primary')
-            with gr.Column():
-                f_out=gr.Textbox(label='Analysis',lines=8)
-        f_btn.click(detect_fake_news,f_in,f_out)
-
-    with gr.Tab('💬 Bullets'):
-        with gr.Row():
-            with gr.Column():
-                b_in=gr.Textbox(label='Enter text',lines=7)
-                b_btn=gr.Button('Convert',variant='primary')
-            with gr.Column():
-                b_out=gr.Textbox(label='Bullet Points',lines=7)
-        b_btn.click(text_to_bullets,b_in,b_out)
-
-    with gr.Tab('🌍 Translator'):
-        with gr.Row():
-            with gr.Column():
-                t_in=gr.Textbox(label='English text',lines=4)
-                t_lang=gr.Dropdown(choices=['French 🇫🇷','German 🇩🇪','Spanish 🇪🇸','Italian 🇮🇹','Hindi 🇮🇳','Arabic 🇸🇦','Portuguese 🇵🇹','Russian 🇷🇺'],value='French 🇫🇷',label='Target Language')
-                t_btn=gr.Button('Translate',variant='primary')
-            with gr.Column():
-                t_out=gr.Textbox(label='Translation',lines=8)
-        t_btn.click(translate_text,[t_in,t_lang],t_out)
-
-demo.launch()
-"@ | Out-File -FilePath app.py -Encoding UTF8
+if __name__ == "__main__":
+    demo.launch()
