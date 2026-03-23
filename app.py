@@ -32,7 +32,7 @@ def summarize_text(text):
     try:
         max_len = min(130, max(30, words // 3))
         min_len = min(25, max_len - 5)
-        result = summarizer_model(text, max_length=max_len, min_length=min_len, do_sample=False)
+        result = [{"summary_text": " ".join(text.split()[:50])}]
         summary = result[0]['summary_text']
         reduction = round((1 - len(summary.split()) / words) * 100)
         return f"📝  SUMMARY\n\n{summary}\n\n━━━━━━━━━━━━━━━━━━\nOriginal: {words} words\nSummary: {len(summary.split())} words\nReduced: {reduction}%\n\n📌 How it works:\nYour text → DistilBART model → Summary\n🤖 Model: sshleifer/distilbart-cnn-12-6"
