@@ -11,7 +11,6 @@ from transformers import pipeline
 print("Loading AI models...")
 
 sentiment_model = pipeline("sentiment-analysis", model="distilbert-base-uncased-finetuned-sst-2-english")
-summarizer_model = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
 translator_model = pipeline("translation_en_to_fr", model="Helsinki-NLP/opus-mt-en-fr")
 qa_model = pipeline("question-answering", model="distilbert-base-cased-distilled-squad")
 
