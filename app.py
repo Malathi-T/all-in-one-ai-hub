@@ -46,7 +46,7 @@ def extract_keywords(text):
         return "Please enter some text."
     entities = ner_pipeline(text)
     if not entities:
-        return "No keywords/entities found."
+        return "No keywords found."
     result = ""
     for ent in entities:
         result += f"🔑 {ent['word']} => {ent['entity_group']} ({round(ent['score']*100, 1)}%)\n"
@@ -87,6 +87,17 @@ def check_grammar(text):
     result = grammar_pipeline(f"grammar: {text}", max_length=512)[0]["generated_text"]
     return f"Corrected Text:\n{result}"
 
+def score_resume(text):
+    if not text.strip():
+        return "Please enter resume text."
+    keywords = ["experience", "skills", "education", "project", "python", "java", "sql", "team", "leadership", "communication"]
+    text_lower = text.lower()
+    found = [k for k in keywords if k in text_lower]
+    score = len(found) * 10
+    if score > 100:
+        score = 100
+    return f"📄 Resume Score: {score}/100\n\nFound keywords: {', '.join(found) if found else 'None'}\nTip: Add more skills, projects and experience!"
+
 custom_css = """
 .header-banner {
     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
@@ -101,10 +112,10 @@ custom_css = """
     color: #ff6b35 !important;
 }
 .header-subtitle {
-    color: #a0aec0;
+    color: #ffffff !important;
     font-size: 1em;
     margin-top: 10px;
-    background: rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.15);
     border-radius: 20px;
     padding: 6px 20px;
     display: inline-block;
@@ -124,13 +135,13 @@ with gr.Blocks(css=custom_css, title="All-in-One AI Hub") as demo:
     gr.HTML("""
     <div class="header-banner">
         <div class="header-title">🔥 All-in-One AI Hub</div>
-        <div class="header-subtitle">User Input → Hugging Face Model → AI Output</div>
+        <div class="header-subtitle" style="color:#ffffff;">User Input → Hugging Face Model → AI Output</div>
     </div>
     """)
 
     with gr.Tabs():
 
-        with gr.Tab("😊 Sentiment Analysis"):
+        with gr.Tab("😊 Sentiment"):
             gr.HTML('<div class="info-box"><b>What it does:</b> Detects if text is Positive or Negative<br><b>Flow:</b> You type → DistilBERT model → POSITIVE or NEGATIVE result<br><b>Use case:</b> Analyzing reviews, feedback, comments</div>')
             with gr.Row():
                 s_input = gr.Textbox(label="Enter your text", placeholder="I love learning AI!", lines=5)
@@ -138,14 +149,14 @@ with gr.Blocks(css=custom_css, title="All-in-One AI Hub") as demo:
             gr.Button("🔍 Analyze Sentiment", variant="primary").click(analyze_sentiment, inputs=s_input, outputs=s_output)
             gr.Examples(["I love this product!", "This is terrible.", "Today was okay."], inputs=s_input)
 
-        with gr.Tab("📝 Text Summarizer"):
+        with gr.Tab("📝 Summarizer"):
             gr.HTML('<div class="info-box"><b>What it does:</b> Shortens long text into key points<br><b>Flow:</b> You paste long text → Model extracts key sentences → Summary<br><b>Use case:</b> Summarizing articles, essays, reports</div>')
             with gr.Row():
                 sum_input = gr.Textbox(label="Enter your text", placeholder="Paste a long paragraph here...", lines=5)
                 sum_output = gr.Textbox(label="AI Result", lines=5)
             gr.Button("📝 Summarize Text", variant="primary").click(summarize_text, inputs=sum_input, outputs=sum_output)
 
-        with gr.Tab("😲 Emotion Detector"):
+        with gr.Tab("😲 Emotion"):
             gr.HTML('<div class="info-box"><b>What it does:</b> Detects emotion — joy, sadness, anger, fear, surprise<br><b>Flow:</b> You type → RoBERTa model → Emotion label + confidence<br><b>Use case:</b> Understanding tone in messages, feedback</div>')
             with gr.Row():
                 e_input = gr.Textbox(label="Enter your text", placeholder="I am so happy today!", lines=5)
@@ -176,20 +187,27 @@ with gr.Blocks(css=custom_css, title="All-in-One AI Hub") as demo:
                 f_output = gr.Textbox(label="AI Result", lines=5)
             gr.Button("🔍 Check News", variant="primary").click(check_fake_news, inputs=f_input, outputs=f_output)
 
-        with gr.Tab("💬 Bullet Points"):
+        with gr.Tab("💬 Bullets"):
             gr.HTML('<div class="info-box"><b>What it does:</b> Converts paragraph into bullet points<br><b>Flow:</b> You paste text → Splits into sentences → Bullet list<br><b>Use case:</b> Making notes, summaries, presentations</div>')
             with gr.Row():
                 b_input = gr.Textbox(label="Enter your text", placeholder="Type a paragraph...", lines=5)
                 b_output = gr.Textbox(label="AI Result", lines=5)
             gr.Button("💬 Make Bullet Points", variant="primary").click(make_bullets, inputs=b_input, outputs=b_output)
 
-        with gr.Tab("🔤 Grammar Check"):
+        with gr.Tab("🔤 Grammar"):
             gr.HTML('<div class="info-box"><b>What it does:</b> Fixes grammar errors in your text<br><b>Flow:</b> You type → T5 grammar model → Corrected sentence<br><b>Use case:</b> Proofreading emails, essays, messages</div>')
             with gr.Row():
                 g_input = gr.Textbox(label="Enter your text", placeholder="He go to school yesterday.", lines=5)
                 g_output = gr.Textbox(label="AI Result", lines=5)
             gr.Button("🔤 Check Grammar", variant="primary").click(check_grammar, inputs=g_input, outputs=g_output)
             gr.Examples(["He go to school yesterday.", "She don't like apples."], inputs=g_input)
+
+        with gr.Tab("📄 Resume"):
+            gr.HTML('<div class="info-box"><b>What it does:</b> Scores your resume based on keywords<br><b>Flow:</b> You paste resume → Keyword analysis → Score out of 100<br><b>Use case:</b> Checking resume strength before applying</div>')
+            with gr.Row():
+                r_input = gr.Textbox(label="Paste your resume", placeholder="Paste your resume text here...", lines=5)
+                r_output = gr.Textbox(label="AI Result", lines=5)
+            gr.Button("📄 Score Resume", variant="primary").click(score_resume, inputs=r_input, outputs=r_output)
 
         with gr.Tab("ℹ️ About"):
             gr.Markdown("""
@@ -207,6 +225,7 @@ with gr.Blocks(css=custom_css, title="All-in-One AI Hub") as demo:
 | 🤔 Fake News | Real/Fake news detector |
 | 💬 Bullets | Text to bullet points |
 | 🔤 Grammar | Grammar correction |
+| 📄 Resume | Resume scorer |
             """)
 
 demo.launch()
