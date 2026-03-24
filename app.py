@@ -3,7 +3,6 @@ from transformers import pipeline
 
 # Load models
 sentiment_pipeline = pipeline("sentiment-analysis", model="distilbert-base-uncased-finetuned-sst-2-english")
-emotion_pipeline = pipeline("text-classification", model="j-hartmann/emotion-english-distilroberta-base")
 ner_pipeline = pipeline("ner", model="dbmdz/bert-large-cased-finetuned-conll03-english", aggregation_strategy="simple")
 lang_pipeline = pipeline("text-classification", model="papluca/xlm-roberta-base-language-detection")
 fake_pipeline = pipeline("text-classification", model="hamzab/roberta-fake-news-classification")
@@ -27,19 +26,6 @@ def summarize_text(text):
         return "Text too short to summarize."
     summary = ". ".join(sentences[:3]) + "."
     return f"Summary:\n{summary}"
-
-def analyze_emotion(text):
-    if not text.strip():
-        return "Please enter some text."
-    result = emotion_pipeline(text)[0]
-    emotion_emojis = {
-        "joy": "😄", "sadness": "😢", "anger": "😠",
-        "fear": "😨", "surprise": "😲", "disgust": "🤢", "neutral": "😐"
-    }
-    label = result["label"]
-    score = round(result["score"] * 100, 2)
-    emoji = emotion_emojis.get(label.lower(), "🎭")
-    return f"{emoji} Emotion: {label.upper()}\nConfidence: {score}%"
 
 def extract_keywords(text):
     if not text.strip():
@@ -93,9 +79,7 @@ def score_resume(text):
     keywords = ["experience", "skills", "education", "project", "python", "java", "sql", "team", "leadership", "communication"]
     text_lower = text.lower()
     found = [k for k in keywords if k in text_lower]
-    score = len(found) * 10
-    if score > 100:
-        score = 100
+    score = min(len(found) * 10, 100)
     return f"📄 Resume Score: {score}/100\n\nFound keywords: {', '.join(found) if found else 'None'}\nTip: Add more skills, projects and experience!"
 
 custom_css = """
@@ -110,15 +94,6 @@ custom_css = """
     font-size: 2.2em;
     font-weight: bold;
     color: #ff6b35 !important;
-}
-.header-subtitle {
-    color: #ffffff !important;
-    font-size: 1em;
-    margin-top: 10px;
-    background: rgba(255,255,255,0.15);
-    border-radius: 20px;
-    padding: 6px 20px;
-    display: inline-block;
 }
 .info-box {
     background: rgba(99, 102, 241, 0.1);
@@ -135,7 +110,9 @@ with gr.Blocks(css=custom_css, title="All-in-One AI Hub") as demo:
     gr.HTML("""
     <div class="header-banner">
         <div class="header-title">🔥 All-in-One AI Hub</div>
-        <div class="header-subtitle" style="color:#ffffff;">User Input → Hugging Face Model → AI Output</div>
+        <div style="color:#ffffff; font-size:1em; margin-top:10px; background:rgba(255,255,255,0.15); border-radius:20px; padding:6px 20px; display:inline-block;">
+            User Input → Hugging Face Model → AI Output
+        </div>
     </div>
     """)
 
@@ -155,14 +132,6 @@ with gr.Blocks(css=custom_css, title="All-in-One AI Hub") as demo:
                 sum_input = gr.Textbox(label="Enter your text", placeholder="Paste a long paragraph here...", lines=5)
                 sum_output = gr.Textbox(label="AI Result", lines=5)
             gr.Button("📝 Summarize Text", variant="primary").click(summarize_text, inputs=sum_input, outputs=sum_output)
-
-        with gr.Tab("😲 Emotion"):
-            gr.HTML('<div class="info-box"><b>What it does:</b> Detects emotion — joy, sadness, anger, fear, surprise<br><b>Flow:</b> You type → RoBERTa model → Emotion label + confidence<br><b>Use case:</b> Understanding tone in messages, feedback</div>')
-            with gr.Row():
-                e_input = gr.Textbox(label="Enter your text", placeholder="I am so happy today!", lines=5)
-                e_output = gr.Textbox(label="AI Result", lines=5)
-            gr.Button("🎭 Detect Emotion", variant="primary").click(analyze_emotion, inputs=e_input, outputs=e_output)
-            gr.Examples(["I am so happy today!", "I feel scared.", "This makes me angry!"], inputs=e_input)
 
         with gr.Tab("🎯 Keywords"):
             gr.HTML('<div class="info-box"><b>What it does:</b> Extracts named entities — people, places, organizations<br><b>Flow:</b> You type → BERT NER model → Keywords + entity type<br><b>Use case:</b> Extracting important names from articles</div>')
@@ -219,7 +188,6 @@ with gr.Blocks(css=custom_css, title="All-in-One AI Hub") as demo:
 |-----|---------|
 | 😊 Sentiment | Positive/Negative detector |
 | 📝 Summarizer | Long text to short summary |
-| 😲 Emotion | joy/sadness/anger/fear |
 | 🎯 Keywords | Named entity extractor |
 | 🌐 Lang Detect | Any language detector |
 | 🤔 Fake News | Real/Fake news detector |
